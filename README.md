@@ -1,3 +1,6 @@
+> [!NOTE]
+> **2-hour submission:** commit [`cb540df`](../../commit/cb540dfe8fadc4125385c836516f912d611276f4) (tagged `submission`). Any later commits are post-submission improvements.
+
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
 ## Getting Started
