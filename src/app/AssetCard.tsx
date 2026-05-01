@@ -12,9 +12,7 @@ const bucket = (n: number) => Math.ceil(n / SIZE_BUCKET) * SIZE_BUCKET;
 
 const subscribeDpr = () => () => {};
 const getDpr = () =>
-  typeof window === "undefined"
-    ? 2
-    : Math.min(window.devicePixelRatio || 1, 2);
+  typeof window === "undefined" ? 2 : Math.min(window.devicePixelRatio || 1, 2);
 const getServerDpr = () => 2;
 
 export const AssetCard = memo(function AssetCard({
@@ -62,45 +60,45 @@ export const AssetCard = memo(function AssetCard({
 
   return (
     <ItemContextMenu id={item.id}>
-    <div
-      ref={setRefs}
-      {...listeners}
-      {...attributes}
-      data-draggable="true"
-      data-selected={isSelected}
-      onClick={(e) => toggle(item.id, e)}
-      style={{
-        width: item.width,
-        height: item.height,
-        opacity: isDragging ? 0.4 : 1,
-        cursor: "grab",
-        touchAction: "none",
-      }}
-      className="group/asset-card relative shrink-0 rounded-2xl ring-2 ring-inset ring-transparent transition-colors hover:bg-neutral-200 data-[selected=true]:bg-neutral-200 data-[selected=true]:ring-blue-600"
-    >
-      <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-xl bg-neutral-200">
-        <img
-          src={`${item.asset.assets.image}?w=${w}&h=${h}&fit=crop&auto=format&q=75`}
-          alt={title ?? ""}
-          loading="lazy"
-          draggable={false}
-          className="h-full w-full object-cover"
-        />
-      </div>
-      <div className="pointer-events-none absolute inset-1 flex flex-col justify-end overflow-hidden rounded-xl">
-        <div className="flex h-1/2 min-h-[96px] flex-col justify-end gap-0.5 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover/asset-card:opacity-100 group-data-[selected=true]/asset-card:opacity-100">
-          {title && (
-            <p
-              className="truncate text-base font-medium text-white"
-              style={{ textShadow: "rgba(0,0,0,0.4) 0 0 4px" }}
-            >
-              {title}
-            </p>
-          )}
-          {meta && <p className="truncate text-xs text-white/90">{meta}</p>}
+      <div
+        ref={setRefs}
+        {...listeners}
+        {...attributes}
+        data-draggable="true"
+        data-selected={isSelected}
+        onClick={(e) => toggle(item.id, e)}
+        style={{
+          width: item.width,
+          height: item.height,
+          opacity: isDragging ? 0.4 : 1,
+          cursor: "grab",
+          touchAction: "none",
+        }}
+        className="group/asset-card relative shrink-0 rounded-2xl ring-2 ring-inset ring-transparent transition-colors hover:bg-neutral-200 data-[selected=true]:bg-neutral-200 data-[selected=true]:ring-blue-600"
+      >
+        <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-xl bg-neutral-200">
+          {/* eslint-disable-next-line @next/next/no-img-element -- imgix already serves the exact pixel size + WebP/AVIF; routing through next/image would re-encode and add latency */}
+          <img
+            src={`${item.asset.assets.image}?w=${w}&h=${h}&fit=crop&auto=format&q=75`}
+            alt={title ?? ""}
+            draggable={false}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="pointer-events-none absolute inset-1 flex flex-col justify-end overflow-hidden rounded-xl">
+          <div className="flex h-1/2 min-h-[96px] flex-col justify-end gap-0.5 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover/asset-card:opacity-100 group-data-[selected=true]/asset-card:opacity-100">
+            {title && (
+              <p
+                className="truncate text-base font-medium text-white"
+                style={{ textShadow: "rgba(0,0,0,0.4) 0 0 4px" }}
+              >
+                {title}
+              </p>
+            )}
+            {meta && <p className="truncate text-xs text-white/90">{meta}</p>}
+          </div>
         </div>
       </div>
-    </div>
     </ItemContextMenu>
   );
 });

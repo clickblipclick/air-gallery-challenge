@@ -161,21 +161,16 @@ const Row = memo(function Row({
 
   return (
     <div
+      className="absolute top-0 left-0 w-full"
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
         height: row.height,
         transform: `translateY(${top}px)`,
       }}
     >
       <div
+        className="relative flex h-full"
         style={{
-          position: "relative",
-          display: "flex",
           gap: GAP,
-          height: "100%",
         }}
       >
         {row.items.map((item) => (
@@ -194,15 +189,9 @@ const Row = memo(function Row({
 const DropLine = ({ x }: { x: number }) => (
   <div
     aria-hidden
+    className="absolute top-2 bottom-2 rounded-full w-[3px] bg-blue-600 pointer-events-none"
     style={{
-      position: "absolute",
-      top: 0,
-      bottom: 0,
-      left: x,
-      width: 2,
-      borderRadius: 1,
-      background: "rgb(37, 99, 235)",
-      pointerEvents: "none",
+      transform: `translateX(${x}px)`,
     }}
   />
 );

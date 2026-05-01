@@ -70,6 +70,7 @@ const BoardCard = ({
       <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-lg">
         {board.thumbnails?.[0] && (
           <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- imgix already serves the exact pixel size + WebP/AVIF; routing through next/image would re-encode and add latency */}
             <img
               src={board.thumbnails[0]}
               alt={board.title}
