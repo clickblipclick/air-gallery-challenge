@@ -6,6 +6,7 @@ import {
   useState,
   useLayoutEffect,
   useEffect,
+  useCallback,
 } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -21,7 +22,12 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import type { Clip } from "./api/clips";
-import { justifyRows, type LaidOutItem } from "./justifyRows";
+import {
+  justifyRows,
+  type LaidOutItem,
+  type Row as RowType,
+} from "./justifyRows";
+import { useSelection, useRegisterSelectionBoxes } from "./SelectionContext";
 
 const TARGET_ROW_HEIGHT = 240;
 const GAP = 8;
@@ -82,8 +88,38 @@ export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  const getItemBoxes = useCallback(() => {
+    const parent = parentRef.current;
+    if (!parent) return [];
+    const rect = parent.getBoundingClientRect();
+    const out: Array<{
+      id: string;
+      box: { left: number; top: number; width: number; height: number };
+    }> = [];
+    for (const row of rowsRef.current) {
+      for (const item of row.items) {
+        out.push({
+          id: item.id,
+          box: {
+            left: rect.left + item.x,
+            top: rect.top + row.top,
+            width: item.width,
+            height: item.height,
+          },
+        });
+      }
+    }
+    return out;
+  }, []);
+
+  useRegisterSelectionBoxes(getItemBoxes);
+  const { isSelected, toggle } = useSelection();
+
   const activeAsset = useMemo(
-    () => (activeId ? assets.find((a) => a.id === activeId) ?? null : null),
+    () => (activeId ? (assets.find((a) => a.id === activeId) ?? null) : null),
     [activeId, assets],
   );
 
@@ -100,8 +136,7 @@ export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
     }
     const overRect = over.rect;
     const pointerX =
-      (activatorEvent as PointerEvent).clientX +
-      (event.delta?.x ?? 0);
+      (activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0);
     const midpoint = overRect.left + overRect.width / 2;
     setIndicator({
       targetId: String(over.id),
@@ -163,6 +198,8 @@ export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
                   top={vRow.start - virtualizer.options.scrollMargin}
                   activeId={activeId}
                   indicator={indicator}
+                  isSelected={isSelected}
+                  onToggle={toggle}
                 />
               );
             })}
@@ -181,14 +218,24 @@ const Row = ({
   top,
   activeId,
   indicator,
+  isSelected,
+  onToggle,
 }: {
-  row: { items: LaidOutItem[]; height: number };
+  row: RowType;
   top: number;
   activeId: string | null;
   indicator: DropIndicator | null;
+  isSelected: (id: string) => boolean;
+  onToggle: (id: string, event: React.MouseEvent) => void;
 }) => {
-  let cursor = 0;
-  const indicatorItem = row.items.find((it) => it.id === indicator?.targetId);
+  const indicatorItem = indicator
+    ? row.items.find((it) => it.id === indicator.targetId)
+    : null;
+  const indicatorX = indicatorItem
+    ? indicator!.position === "before"
+      ? indicatorItem.x - GAP / 2 - 1
+      : indicatorItem.x + indicatorItem.width + GAP / 2 - 1
+    : null;
 
   return (
     <div
@@ -209,60 +256,53 @@ const Row = ({
           height: "100%",
         }}
       >
-        {row.items.map((item) => {
-          const itemLeft = cursor;
-          cursor += item.width + GAP;
-          return (
-            <AssetCard
-              key={item.id}
-              item={item}
-              isDragging={item.id === activeId}
-              left={itemLeft}
-            />
-          );
-        })}
-        {indicatorItem &&
-          (() => {
-            let left = 0;
-            for (const it of row.items) {
-              if (it.id === indicatorItem.id) break;
-              left += it.width + GAP;
-            }
-            const x =
-              indicator!.position === "before"
-                ? left - GAP / 2 - 1
-                : left + indicatorItem.width + GAP / 2 - 1;
-            return (
-              <div
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: x,
-                  width: 2,
-                  borderRadius: 1,
-                  background: "rgb(37, 99, 235)",
-                  pointerEvents: "none",
-                }}
-              />
-            );
-          })()}
+        {row.items.map((item) => (
+          <AssetCard
+            key={item.id}
+            item={item}
+            isDragging={item.id === activeId}
+            isSelected={isSelected(item.id)}
+            onToggle={onToggle}
+          />
+        ))}
+        {indicatorX !== null && <DropLine x={indicatorX} />}
       </div>
     </div>
   );
 };
 
+const DropLine = ({ x }: { x: number }) => (
+  <div
+    aria-hidden
+    style={{
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: x,
+      width: 2,
+      borderRadius: 1,
+      background: "rgb(37, 99, 235)",
+      pointerEvents: "none",
+    }}
+  />
+);
+
 const AssetCard = ({
   item,
   isDragging,
-  left,
+  isSelected,
+  onToggle,
 }: {
   item: LaidOutItem;
   isDragging: boolean;
-  left: number;
+  isSelected: boolean;
+  onToggle: (id: string, event: React.MouseEvent) => void;
 }) => {
-  const { setNodeRef: setDragRef, listeners, attributes } = useDraggable({
+  const {
+    setNodeRef: setDragRef,
+    listeners,
+    attributes,
+  } = useDraggable({
     id: item.id,
   });
   const { setNodeRef: setDropRef } = useDroppable({ id: item.id });
@@ -280,6 +320,9 @@ const AssetCard = ({
       ref={setRefs}
       {...listeners}
       {...attributes}
+      data-draggable="true"
+      data-selected={isSelected}
+      onClick={(e) => onToggle(item.id, e)}
       style={{
         width: item.width,
         height: item.height,
@@ -287,7 +330,7 @@ const AssetCard = ({
         cursor: "grab",
         touchAction: "none",
       }}
-      className="relative shrink-0 overflow-hidden rounded-xl bg-neutral-200"
+      className="relative shrink-0 overflow-hidden rounded-xl bg-neutral-200 ring-2 ring-transparent ring-offset-2 data-[selected=true]:ring-blue-500"
     >
       <img
         src={`${item.asset.assets.image}?w=${w * 2}&h=${h * 2}&fit=crop&auto=format&q=75`}
@@ -301,8 +344,7 @@ const AssetCard = ({
 };
 
 const AssetOverlay = ({ asset }: { asset: Clip }) => {
-  const ratio =
-    asset.width && asset.height ? asset.width / asset.height : 1;
+  const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
   const h = TARGET_ROW_HEIGHT;
   const w = ratio * h;
   return (

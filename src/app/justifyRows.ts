@@ -4,12 +4,14 @@ export type LaidOutItem = {
   id: string;
   width: number;
   height: number;
+  x: number;
   asset: Clip;
 };
 
 export type Row = {
   items: LaidOutItem[];
   height: number;
+  top: number;
 };
 
 const MIN_RATIO = 0.5;
@@ -37,21 +39,30 @@ export function justifyRows({
   const rows: Row[] = [];
   let bucket: { asset: Clip; ratio: number }[] = [];
   let ratioSum = 0;
+  let cumulativeTop = 0;
 
   const flush = (isLastRow: boolean) => {
     if (bucket.length === 0) return;
     const gapWidth = (bucket.length - 1) * gap;
     const idealHeight = (containerWidth - gapWidth) / ratioSum;
     const h = isLastRow ? Math.min(targetRowHeight, idealHeight) : idealHeight;
-    rows.push({
-      height: h,
-      items: bucket.map(({ asset, ratio }) => ({
+
+    let cursor = 0;
+    const items: LaidOutItem[] = bucket.map(({ asset, ratio }) => {
+      const w = ratio * h;
+      const item: LaidOutItem = {
         id: asset.id,
-        width: ratio * h,
+        width: w,
         height: h,
+        x: cursor,
         asset,
-      })),
+      };
+      cursor += w + gap;
+      return item;
     });
+
+    rows.push({ items, height: h, top: cumulativeTop });
+    cumulativeTop += h + gap;
     bucket = [];
     ratioSum = 0;
   };
