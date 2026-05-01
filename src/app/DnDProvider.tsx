@@ -11,10 +11,13 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import type { Clip } from "./api/clips";
@@ -53,32 +56,51 @@ export const DnDProvider = ({ children }: { children: React.ReactNode }) => {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  // Prefer direct pointer hits (so the board sidebar still wins when hovered),
+  // but fall back to the nearest asset card when the pointer is in row gutters
+  // or past the end of a row — otherwise dropping near row edges is finicky.
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const direct = pointerWithin(args);
+    if (direct.length > 0) return direct;
+    const assetContainers = args.droppableContainers.filter(
+      (c) => (c.data.current as OverData | undefined)?.kind === "asset",
+    );
+    return closestCenter({ ...args, droppableContainers: assetContainers });
+  }, []);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as ActiveData | undefined;
     setActiveAsset(data?.kind === "asset" ? data.asset : null);
     setIndicator(null);
   }, []);
 
-  const handleDragOver = useCallback((event: DragOverEvent) => {
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
     const { over, active, activatorEvent } = event;
     const overData = over?.data.current as OverData | undefined;
 
-    if (!over || !overData || over.id === active.id) {
-      setIndicator(null);
-      return;
-    }
+    const next: DropIndicator | null = (() => {
+      if (!over || !overData || over.id === active.id) return null;
+      if (overData.kind === "board") return null;
+      const pointerX =
+        (activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0);
+      const midpoint = over.rect.left + over.rect.width / 2;
+      return {
+        targetAssetId: overData.assetId,
+        position: pointerX < midpoint ? "before" : "after",
+      };
+    })();
 
-    if (overData.kind === "board") {
-      setIndicator(null);
-      return;
-    }
-
-    const pointerX =
-      (activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0);
-    const midpoint = over.rect.left + over.rect.width / 2;
-    setIndicator({
-      targetAssetId: overData.assetId,
-      position: pointerX < midpoint ? "before" : "after",
+    setIndicator((prev) => {
+      if (prev === next) return prev;
+      if (
+        prev &&
+        next &&
+        prev.targetAssetId === next.targetAssetId &&
+        prev.position === next.position
+      ) {
+        return prev;
+      }
+      return next;
     });
   }, []);
 
@@ -121,8 +143,9 @@ export const DnDProvider = ({ children }: { children: React.ReactNode }) => {
     <DnDContextValue.Provider value={value}>
       <DndContext
         sensors={sensors}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
