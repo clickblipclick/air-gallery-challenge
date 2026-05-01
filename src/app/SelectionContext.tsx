@@ -19,9 +19,13 @@ type BoxProvider = () => Array<{ id: string; box: Box }>;
 
 type ContextValue = {
   toggle: (id: string, event: React.MouseEvent) => void;
+  selectOnly: (id: string) => void;
+  clearSelection: () => void;
   registerProvider: (fn: BoxProvider) => () => void;
   subscribe: (id: string, cb: () => void) => () => void;
+  subscribeAny: (cb: () => void) => () => void;
   getIsSelected: (id: string) => boolean;
+  getSize: () => number;
 };
 
 const SelectionContext = createContext<ContextValue | null>(null);
@@ -39,6 +43,7 @@ export const SelectionProvider = ({
 }) => {
   const selectedRef = useRef<Set<string>>(new Set());
   const listenersRef = useRef<Map<string, Set<() => void>>>(new Map());
+  const anyListenersRef = useRef<Set<() => void>>(new Set());
   const providersRef = useRef<Set<BoxProvider>>(new Set());
 
   // Replace the selection set and notify listeners for any id whose
@@ -60,6 +65,7 @@ export const SelectionProvider = ({
       next.forEach((id) => {
         if (!prev.has(id)) notify(id);
       });
+      anyListenersRef.current.forEach((fn) => fn());
     },
     [],
   );
@@ -82,6 +88,15 @@ export const SelectionProvider = ({
     (id: string) => selectedRef.current.has(id),
     [],
   );
+
+  const getSize = useCallback(() => selectedRef.current.size, []);
+
+  const subscribeAny = useCallback((cb: () => void) => {
+    anyListenersRef.current.add(cb);
+    return () => {
+      anyListenersRef.current.delete(cb);
+    };
+  }, []);
 
   const registerProvider = useCallback((fn: BoxProvider) => {
     providersRef.current.add(fn);
@@ -134,6 +149,20 @@ export const SelectionProvider = ({
     [applySelection],
   );
 
+  const selectOnly = useCallback(
+    (id: string) => {
+      applySelection((prev) => {
+        if (prev.size === 1 && prev.has(id)) return prev;
+        return new Set([id]);
+      });
+    },
+    [applySelection],
+  );
+
+  const clearSelection = useCallback(() => {
+    applySelection((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [applySelection]);
+
   // Clear selection on bare-ground clicks (anywhere not on a selectable item).
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
@@ -153,8 +182,26 @@ export const SelectionProvider = ({
   }, [applySelection]);
 
   const value = useMemo<ContextValue>(
-    () => ({ toggle, registerProvider, subscribe, getIsSelected }),
-    [toggle, registerProvider, subscribe, getIsSelected],
+    () => ({
+      toggle,
+      selectOnly,
+      clearSelection,
+      registerProvider,
+      subscribe,
+      subscribeAny,
+      getIsSelected,
+      getSize,
+    }),
+    [
+      toggle,
+      selectOnly,
+      clearSelection,
+      registerProvider,
+      subscribe,
+      subscribeAny,
+      getIsSelected,
+      getSize,
+    ],
   );
 
   return (
@@ -172,12 +219,21 @@ const useSelectionContext = () => {
 };
 
 /**
- * Stable selection actions (toggle). Identity never changes, so consumers
- * can take this without re-rendering on selection updates.
+ * Stable selection actions. Identity never changes, so consumers can take
+ * these without re-rendering on selection updates.
  */
 export const useSelectionActions = () => {
-  const { toggle } = useSelectionContext();
-  return { toggle };
+  const { toggle, selectOnly, clearSelection } = useSelectionContext();
+  return { toggle, selectOnly, clearSelection };
+};
+
+/**
+ * Subscribe to the total selection count. Only the calling component
+ * re-renders when the count (or selected set) changes.
+ */
+export const useSelectionCount = () => {
+  const { subscribeAny, getSize } = useSelectionContext();
+  return useSyncExternalStore(subscribeAny, getSize, () => 0);
 };
 
 /**

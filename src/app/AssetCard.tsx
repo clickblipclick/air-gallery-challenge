@@ -4,6 +4,7 @@ import { memo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LaidOutItem } from "./justifyRows";
 import { useIsSelected, useSelectionActions } from "./SelectionContext";
+import { ItemContextMenu } from "./ItemContextMenu";
 
 // Round up to a coarse bucket so the CDN cache hits across small resizes.
 const SIZE_BUCKET = 64;
@@ -60,6 +61,7 @@ export const AssetCard = memo(function AssetCard({
     .join(" · ");
 
   return (
+    <ItemContextMenu id={item.id}>
     <div
       ref={setRefs}
       {...listeners}
@@ -99,6 +101,7 @@ export const AssetCard = memo(function AssetCard({
         </div>
       </div>
     </div>
+    </ItemContextMenu>
   );
 });
 

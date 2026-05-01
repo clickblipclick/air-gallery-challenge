@@ -8,6 +8,7 @@ import {
   useRegisterSelectionBoxes,
   useSelectionActions,
 } from "./SelectionContext";
+import { ItemContextMenu } from "./ItemContextMenu";
 
 export const BoardList = ({ boards }: { boards: Board[] }) => {
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
@@ -53,6 +54,7 @@ const BoardCard = ({
   const { toggle } = useSelectionActions();
 
   return (
+    <ItemContextMenu id={board.id}>
     <li
       ref={(el) => {
         registerRef(el);
@@ -87,5 +89,6 @@ const BoardCard = ({
         </span>
       </div>
     </li>
+    </ItemContextMenu>
   );
 };
