@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -19,8 +18,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import type { Clip } from "./api/clips";
-import { AssetOverlay } from "./AssetGallery";
-import { loadMoreAssets } from "./actions";
+import { AssetOverlay } from "./AssetOverlay";
+import { useAssets } from "./AssetsProvider";
 
 export type DropIndicator = {
   targetAssetId: string;
@@ -32,16 +31,12 @@ type OverData =
   | { kind: "asset"; assetId: string }
   | { kind: "board"; boardId: string };
 
-type Context = {
-  assets: Clip[];
+type ContextValue = {
   activeAsset: Clip | null;
   indicator: DropIndicator | null;
-  hasMore: boolean;
-  isLoadingMore: boolean;
-  loadMore: () => void;
 };
 
-const DnDContextValue = createContext<Context | null>(null);
+const DnDContextValue = createContext<ContextValue | null>(null);
 
 export const useDnD = () => {
   const ctx = useContext(DnDContextValue);
@@ -49,40 +44,10 @@ export const useDnD = () => {
   return ctx;
 };
 
-export const DnDProvider = ({
-  initialAssets,
-  initialCursor,
-  initialHasMore,
-  children,
-}: {
-  initialAssets: Clip[];
-  initialCursor: string | null;
-  initialHasMore: boolean;
-  children: React.ReactNode;
-}) => {
-  const [assets, setAssets] = useState(initialAssets);
+export const DnDProvider = ({ children }: { children: React.ReactNode }) => {
+  const { reorderAsset, removeAsset } = useAssets();
   const [activeAsset, setActiveAsset] = useState<Clip | null>(null);
   const [indicator, setIndicator] = useState<DropIndicator | null>(null);
-  const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const loadingRef = useRef(false);
-
-  const loadMore = useCallback(() => {
-    if (loadingRef.current || !hasMore) return;
-    loadingRef.current = true;
-    setIsLoadingMore(true);
-    loadMoreAssets(cursor)
-      .then((res) => {
-        setAssets((prev) => [...prev, ...res.data.clips]);
-        setCursor(res.pagination.cursor);
-        setHasMore(res.pagination.hasMore);
-      })
-      .finally(() => {
-        loadingRef.current = false;
-        setIsLoadingMore(false);
-      });
-  }, [cursor, hasMore]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -130,31 +95,16 @@ export const DnDProvider = ({
       const draggedId = activeData.asset.id;
 
       if (overData.kind === "board") {
-        setAssets((prev) => prev.filter((a) => a.id !== draggedId));
+        removeAsset(draggedId);
         return;
       }
 
       if (overData.assetId === draggedId) return;
       if (!indicator) return;
 
-      setAssets((prev) => {
-        const fromIdx = prev.findIndex((a) => a.id === draggedId);
-        if (fromIdx === -1) return prev;
-        const without = [
-          ...prev.slice(0, fromIdx),
-          ...prev.slice(fromIdx + 1),
-        ];
-        let toIdx = without.findIndex((a) => a.id === indicator.targetAssetId);
-        if (toIdx === -1) return prev;
-        if (indicator.position === "after") toIdx += 1;
-        return [
-          ...without.slice(0, toIdx),
-          prev[fromIdx],
-          ...without.slice(toIdx),
-        ];
-      });
+      reorderAsset(draggedId, indicator.targetAssetId, indicator.position);
     },
-    [indicator],
+    [indicator, reorderAsset, removeAsset],
   );
 
   const handleDragCancel = useCallback(() => {
@@ -162,16 +112,9 @@ export const DnDProvider = ({
     setIndicator(null);
   }, []);
 
-  const value = useMemo<Context>(
-    () => ({
-      assets,
-      activeAsset,
-      indicator,
-      hasMore,
-      isLoadingMore,
-      loadMore,
-    }),
-    [assets, activeAsset, indicator, hasMore, isLoadingMore, loadMore],
+  const value = useMemo<ContextValue>(
+    () => ({ activeAsset, indicator }),
+    [activeAsset, indicator],
   );
 
   return (

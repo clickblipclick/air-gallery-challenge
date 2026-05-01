@@ -4,6 +4,7 @@ import { Section } from "./Section";
 import { AssetGallery } from "./AssetGallery";
 import { BoardList } from "./BoardList";
 import { SelectionProvider } from "./SelectionContext";
+import { AssetsProvider } from "./AssetsProvider";
 import { DnDProvider } from "./DnDProvider";
 
 export default async function Home() {
@@ -14,20 +15,22 @@ export default async function Home() {
 
   return (
     <SelectionProvider>
-      <DnDProvider
+      <AssetsProvider
         initialAssets={assets}
         initialCursor={pagination.cursor}
         initialHasMore={pagination.hasMore}
       >
-        <main className="flex flex-col gap-8 py-8">
-          <Section title="Boards">
-            <BoardList boards={boards} />
-          </Section>
-          <Section title="Assets">
-            <AssetGallery />
-          </Section>
-        </main>
-      </DnDProvider>
+        <DnDProvider>
+          <main className="flex flex-col gap-8 py-8">
+            <Section title="Boards">
+              <BoardList boards={boards} />
+            </Section>
+            <Section title="Assets">
+              <AssetGallery />
+            </Section>
+          </main>
+        </DnDProvider>
+      </AssetsProvider>
     </SelectionProvider>
   );
 }
