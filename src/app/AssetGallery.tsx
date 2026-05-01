@@ -9,18 +9,7 @@ import {
   useCallback,
 } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Clip } from "./api/clips";
 import {
   justifyRows,
@@ -28,6 +17,7 @@ import {
   type Row as RowType,
 } from "./justifyRows";
 import { useSelection, useRegisterSelectionBoxes } from "./SelectionContext";
+import { useDnD, type DropIndicator } from "./DnDProvider";
 
 const TARGET_ROW_HEIGHT = 240;
 const GAP = 8;
@@ -50,17 +40,11 @@ const useElementWidth = () => {
   return [ref, width] as const;
 };
 
-type DropIndicator = {
-  targetId: string;
-  position: "before" | "after";
-};
-
-export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
+export const AssetGallery = () => {
   const parentRef = useRef<HTMLDivElement>(null);
   const [innerRef, width] = useElementWidth();
-  const [assets, setAssets] = useState(initialAssets);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [indicator, setIndicator] = useState<DropIndicator | null>(null);
+  const { assets, activeAsset, indicator, hasMore, isLoadingMore, loadMore } =
+    useDnD();
 
   const rows = useMemo(
     () =>
@@ -83,10 +67,6 @@ export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
   useEffect(() => {
     virtualizer.measure();
   }, [rows, virtualizer]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -118,98 +98,50 @@ export const AssetGallery = ({ assets: initialAssets }: { assets: Clip[] }) => {
   useRegisterSelectionBoxes(getItemBoxes);
   const { isSelected, toggle } = useSelection();
 
-  const activeAsset = useMemo(
-    () => (activeId ? (assets.find((a) => a.id === activeId) ?? null) : null),
-    [activeId, assets],
-  );
+  const activeId = activeAsset?.id ?? null;
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(String(event.active.id));
-    setIndicator(null);
-  };
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVisibleIndex = virtualItems[virtualItems.length - 1]?.index;
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over, active, activatorEvent } = event;
-    if (!over || over.id === active.id) {
-      setIndicator(null);
-      return;
-    }
-    const overRect = over.rect;
-    const pointerX =
-      (activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0);
-    const midpoint = overRect.left + overRect.width / 2;
-    setIndicator({
-      targetId: String(over.id),
-      position: pointerX < midpoint ? "before" : "after",
-    });
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-    if (!over || !indicator || over.id === active.id) {
-      setIndicator(null);
-      return;
-    }
-    setAssets((prev) => {
-      const fromIdx = prev.findIndex((a) => a.id === active.id);
-      if (fromIdx === -1) return prev;
-      const without = [...prev.slice(0, fromIdx), ...prev.slice(fromIdx + 1)];
-      let toIdx = without.findIndex((a) => a.id === indicator.targetId);
-      if (toIdx === -1) return prev;
-      if (indicator.position === "after") toIdx += 1;
-      return [
-        ...without.slice(0, toIdx),
-        prev[fromIdx],
-        ...without.slice(toIdx),
-      ];
-    });
-    setIndicator(null);
-  };
-
-  const handleDragCancel = () => {
-    setActiveId(null);
-    setIndicator(null);
-  };
+  useEffect(() => {
+    if (lastVisibleIndex === undefined) return;
+    if (rows.length === 0) return;
+    if (!hasMore || isLoadingMore) return;
+    if (lastVisibleIndex >= rows.length - 4) loadMore();
+  }, [lastVisibleIndex, rows.length, hasMore, isLoadingMore, loadMore]);
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <div ref={parentRef} className="w-full">
-        <div ref={innerRef}>
-          <div
-            style={{
-              height: virtualizer.getTotalSize(),
-              position: "relative",
-              width: "100%",
-            }}
-          >
-            {virtualizer.getVirtualItems().map((vRow) => {
-              const row = rows[vRow.index];
-              return (
-                <Row
-                  key={vRow.index}
-                  row={row}
-                  top={vRow.start - virtualizer.options.scrollMargin}
-                  activeId={activeId}
-                  indicator={indicator}
-                  isSelected={isSelected}
-                  onToggle={toggle}
-                />
-              );
-            })}
-          </div>
+    <div ref={parentRef} className="w-full">
+      <div ref={innerRef}>
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {virtualItems.map((vRow) => {
+            const row = rows[vRow.index];
+            return (
+              <Row
+                key={vRow.index}
+                row={row}
+                top={vRow.start - virtualizer.options.scrollMargin}
+                activeId={activeId}
+                indicator={indicator}
+                isSelected={isSelected}
+                onToggle={toggle}
+              />
+            );
+          })}
         </div>
+        {isLoadingMore && (
+          <div className="flex items-center justify-center py-6 text-sm text-neutral-500">
+            Loading more…
+          </div>
+        )}
       </div>
-      <DragOverlay dropAnimation={null}>
-        {activeAsset ? <AssetOverlay asset={activeAsset} /> : null}
-      </DragOverlay>
-    </DndContext>
+    </div>
   );
 };
 
@@ -229,7 +161,7 @@ const Row = ({
   onToggle: (id: string, event: React.MouseEvent) => void;
 }) => {
   const indicatorItem = indicator
-    ? row.items.find((it) => it.id === indicator.targetId)
+    ? row.items.find((it) => it.id === indicator.targetAssetId)
     : null;
   const indicatorX = indicatorItem
     ? indicator!.position === "before"
@@ -298,14 +230,19 @@ const AssetCard = ({
   isSelected: boolean;
   onToggle: (id: string, event: React.MouseEvent) => void;
 }) => {
+  const dndId = `asset:${item.id}`;
   const {
     setNodeRef: setDragRef,
     listeners,
     attributes,
   } = useDraggable({
-    id: item.id,
+    id: dndId,
+    data: { kind: "asset", asset: item.asset },
   });
-  const { setNodeRef: setDropRef } = useDroppable({ id: item.id });
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: dndId,
+    data: { kind: "asset", assetId: item.id },
+  });
 
   const setRefs = (node: HTMLDivElement | null) => {
     setDragRef(node);
@@ -314,6 +251,17 @@ const AssetCard = ({
 
   const w = Math.ceil(item.width);
   const h = Math.ceil(item.height);
+
+  const title = item.asset.title ?? item.asset.importedName ?? null;
+  const meta = [
+    item.asset.ext?.toUpperCase(),
+    item.asset.size ? formatBytes(item.asset.size) : null,
+    item.asset.width && item.asset.height
+      ? `${item.asset.width} × ${item.asset.height}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -330,20 +278,44 @@ const AssetCard = ({
         cursor: "grab",
         touchAction: "none",
       }}
-      className="relative shrink-0 overflow-hidden rounded-xl bg-neutral-200 ring-2 ring-transparent ring-offset-2 data-[selected=true]:ring-blue-500"
+      className="group/asset-card relative shrink-0 rounded-2xl ring-2 ring-inset ring-transparent transition-colors hover:bg-neutral-200 data-[selected=true]:bg-neutral-200 data-[selected=true]:ring-blue-600"
     >
-      <img
-        src={`${item.asset.assets.image}?w=${w * 2}&h=${h * 2}&fit=crop&auto=format&q=75`}
-        alt={item.asset.title ?? ""}
-        loading="lazy"
-        draggable={false}
-        className="h-full w-full object-cover pointer-events-none"
-      />
+      <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-xl bg-neutral-200">
+        <img
+          src={`${item.asset.assets.image}?w=${w * 2}&h=${h * 2}&fit=crop&auto=format&q=75`}
+          alt={title ?? ""}
+          loading="lazy"
+          draggable={false}
+          className="h-full w-full object-cover"
+        />
+      </div>
+      <div className="pointer-events-none absolute inset-1 flex flex-col justify-end overflow-hidden rounded-xl">
+        <div className="flex h-1/2 min-h-[96px] flex-col justify-end gap-0.5 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover/asset-card:opacity-100 group-data-[selected=true]/asset-card:opacity-100">
+          {title && (
+            <p
+              className="truncate text-base font-medium text-white"
+              style={{ textShadow: "rgba(0,0,0,0.4) 0 0 4px" }}
+            >
+              {title}
+            </p>
+          )}
+          {meta && <p className="truncate text-xs text-white/90">{meta}</p>}
+        </div>
+      </div>
     </div>
   );
 };
 
-const AssetOverlay = ({ asset }: { asset: Clip }) => {
+const formatBytes = (bytes: number) => {
+  if (!bytes) return "";
+  const KB = 1024;
+  const MB = KB * 1024;
+  if (bytes < KB) return `${bytes} B`;
+  if (bytes < MB) return `${Math.round(bytes / KB)} KB`;
+  return `${(bytes / MB).toFixed(0)} MB`;
+};
+
+export const AssetOverlay = ({ asset }: { asset: Clip }) => {
   const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
   const h = TARGET_ROW_HEIGHT;
   const w = ratio * h;
