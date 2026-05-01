@@ -1,10 +1,12 @@
 "use client";
 
-import { memo, useSyncExternalStore } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LaidOutItem } from "./justifyRows";
 import { useIsSelected, useSelectionActions } from "./SelectionContext";
 import { ItemContextMenu, ItemMenuButton } from "./ItemContextMenu";
+
+const HOVER_PLAYBACK_DELAY_MS = 120;
 
 // Round up to a coarse bucket so the CDN cache hits across small resizes.
 const SIZE_BUCKET = 64;
@@ -47,6 +49,12 @@ export const AssetCard = memo(function AssetCard({
   const w = bucket(item.width * dpr);
   const h = bucket(item.height * dpr);
 
+  const previewSrc =
+    item.asset.type === "video"
+      ? (item.asset.assets.previewVideo ?? item.asset.assets.video ?? null)
+      : null;
+  const [hovered, setHovered] = useState(false);
+
   const title = item.asset.title ?? item.asset.importedName ?? null;
   const meta = [
     item.asset.ext?.toUpperCase(),
@@ -67,6 +75,8 @@ export const AssetCard = memo(function AssetCard({
         data-draggable="true"
         data-selected={isSelected}
         onClick={(e) => toggle(item.id, e)}
+        onMouseEnter={previewSrc ? () => setHovered(true) : undefined}
+        onMouseLeave={previewSrc ? () => setHovered(false) : undefined}
         style={{
           width: item.width,
           height: item.height,
@@ -84,6 +94,14 @@ export const AssetCard = memo(function AssetCard({
             draggable={false}
             className="h-full w-full object-cover"
           />
+          {previewSrc && (
+            <VideoHoverPreview src={previewSrc} hovered={hovered} />
+          )}
+          {item.asset.type === "video" && item.asset.duration ? (
+            <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white opacity-100 transition-opacity group-hover/asset-card:opacity-0">
+              {formatDuration(item.asset.duration)}
+            </div>
+          ) : null}
         </div>
         <div className="absolute right-3 top-3">
           <ItemMenuButton
@@ -95,7 +113,7 @@ export const AssetCard = memo(function AssetCard({
           <div className="flex h-1/2 min-h-[96px] flex-col justify-end gap-0.5 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover/asset-card:opacity-100 group-data-[selected=true]/asset-card:opacity-100">
             {title && (
               <p
-                className="truncate text-base font-medium text-white"
+                className="truncate text-sm font-medium text-white"
                 style={{ textShadow: "rgba(0,0,0,0.4) 0 0 4px" }}
               >
                 {title}
@@ -108,6 +126,60 @@ export const AssetCard = memo(function AssetCard({
     </ItemContextMenu>
   );
 });
+
+function VideoHoverPreview({
+  src,
+  hovered,
+}: {
+  src: string;
+  hovered: boolean;
+}) {
+  const { active: dndActive } = useDndContext();
+  const isDragActive = dndActive != null;
+  const [show, setShow] = useState(false);
+  const [canPlay, setCanPlay] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timerRef.current != null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (!hovered || isDragActive) {
+      setShow(false);
+      setCanPlay(false);
+      return;
+    }
+    timerRef.current = setTimeout(() => setShow(true), HOVER_PLAYBACK_DELAY_MS);
+    return () => {
+      if (timerRef.current != null) clearTimeout(timerRef.current);
+    };
+  }, [hovered, isDragActive]);
+
+  if (!show) return null;
+  return (
+    <video
+      src={src}
+      muted
+      loop
+      playsInline
+      autoPlay
+      preload="metadata"
+      onCanPlay={() => setCanPlay(true)}
+      className="absolute inset-0 h-full w-full object-cover"
+      style={{ opacity: canPlay ? 1 : 0 }}
+    />
+  );
+}
+
+const formatDuration = (seconds: number) => {
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+};
 
 const formatBytes = (bytes: number) => {
   if (!bytes) return "";
