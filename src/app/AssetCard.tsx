@@ -1,19 +1,30 @@
 "use client";
 
+import { memo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LaidOutItem } from "./justifyRows";
+import { useIsSelected, useSelectionActions } from "./SelectionContext";
 
-export const AssetCard = ({
+// Round up to a coarse bucket so the CDN cache hits across small resizes.
+const SIZE_BUCKET = 64;
+const bucket = (n: number) => Math.ceil(n / SIZE_BUCKET) * SIZE_BUCKET;
+
+const subscribeDpr = () => () => {};
+const getDpr = () =>
+  typeof window === "undefined"
+    ? 2
+    : Math.min(window.devicePixelRatio || 1, 2);
+const getServerDpr = () => 2;
+
+export const AssetCard = memo(function AssetCard({
   item,
   isDragging,
-  isSelected,
-  onToggle,
 }: {
   item: LaidOutItem;
   isDragging: boolean;
-  isSelected: boolean;
-  onToggle: (id: string, event: React.MouseEvent) => void;
-}) => {
+}) {
+  const isSelected = useIsSelected(item.id);
+  const { toggle } = useSelectionActions();
   const dndId = `asset:${item.id}`;
   const {
     setNodeRef: setDragRef,
@@ -33,8 +44,9 @@ export const AssetCard = ({
     setDropRef(node);
   };
 
-  const w = Math.ceil(item.width);
-  const h = Math.ceil(item.height);
+  const dpr = useSyncExternalStore(subscribeDpr, getDpr, getServerDpr);
+  const w = bucket(item.width * dpr);
+  const h = bucket(item.height * dpr);
 
   const title = item.asset.title ?? item.asset.importedName ?? null;
   const meta = [
@@ -54,7 +66,7 @@ export const AssetCard = ({
       {...attributes}
       data-draggable="true"
       data-selected={isSelected}
-      onClick={(e) => onToggle(item.id, e)}
+      onClick={(e) => toggle(item.id, e)}
       style={{
         width: item.width,
         height: item.height,
@@ -66,7 +78,7 @@ export const AssetCard = ({
     >
       <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-xl bg-neutral-200">
         <img
-          src={`${item.asset.assets.image}?w=${w * 2}&h=${h * 2}&fit=crop&auto=format&q=75`}
+          src={`${item.asset.assets.image}?w=${w}&h=${h}&fit=crop&auto=format&q=75`}
           alt={title ?? ""}
           loading="lazy"
           draggable={false}
@@ -88,7 +100,7 @@ export const AssetCard = ({
       </div>
     </div>
   );
-};
+});
 
 const formatBytes = (bytes: number) => {
   if (!bytes) return "";

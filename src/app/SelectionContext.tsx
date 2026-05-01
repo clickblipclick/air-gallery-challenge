@@ -7,7 +7,7 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import {
   useSelectionContainer,
@@ -18,9 +18,10 @@ import {
 type BoxProvider = () => Array<{ id: string; box: Box }>;
 
 type ContextValue = {
-  isSelected: (id: string) => boolean;
   toggle: (id: string, event: React.MouseEvent) => void;
   registerProvider: (fn: BoxProvider) => () => void;
+  subscribe: (id: string, cb: () => void) => () => void;
+  getIsSelected: (id: string) => boolean;
 };
 
 const SelectionContext = createContext<ContextValue | null>(null);
@@ -36,8 +37,51 @@ export const SelectionProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectedRef = useRef<Set<string>>(new Set());
+  const listenersRef = useRef<Map<string, Set<() => void>>>(new Map());
   const providersRef = useRef<Set<BoxProvider>>(new Set());
+
+  // Replace the selection set and notify listeners for any id whose
+  // membership changed. No React state — consumers subscribe per-id.
+  const applySelection = useCallback(
+    (updater: (prev: Set<string>) => Set<string>) => {
+      const prev = selectedRef.current;
+      const next = updater(prev);
+      if (next === prev) return;
+      selectedRef.current = next;
+      const listeners = listenersRef.current;
+      const notify = (id: string) => {
+        const set = listeners.get(id);
+        if (set) set.forEach((fn) => fn());
+      };
+      prev.forEach((id) => {
+        if (!next.has(id)) notify(id);
+      });
+      next.forEach((id) => {
+        if (!prev.has(id)) notify(id);
+      });
+    },
+    [],
+  );
+
+  const subscribe = useCallback((id: string, cb: () => void) => {
+    const listeners = listenersRef.current;
+    let set = listeners.get(id);
+    if (!set) {
+      set = new Set();
+      listeners.set(id, set);
+    }
+    set.add(cb);
+    return () => {
+      set!.delete(cb);
+      if (set!.size === 0) listeners.delete(id);
+    };
+  }, []);
+
+  const getIsSelected = useCallback(
+    (id: string) => selectedRef.current.has(id),
+    [],
+  );
 
   const registerProvider = useCallback((fn: BoxProvider) => {
     providersRef.current.add(fn);
@@ -46,22 +90,25 @@ export const SelectionProvider = ({
     };
   }, []);
 
-  const handleSelectionChange = useCallback((selectionBox: Box) => {
-    const next = new Set<string>();
-    providersRef.current.forEach((fn) => {
-      for (const { id, box } of fn()) {
-        if (boxesIntersect(box, selectionBox)) next.add(id);
-      }
-    });
-    setSelected((prev) => {
-      if (prev.size !== next.size) return next;
-      let same = true;
-      next.forEach((id) => {
-        if (!prev.has(id)) same = false;
+  const handleSelectionChange = useCallback(
+    (selectionBox: Box) => {
+      const next = new Set<string>();
+      providersRef.current.forEach((fn) => {
+        for (const { id, box } of fn()) {
+          if (boxesIntersect(box, selectionBox)) next.add(id);
+        }
       });
-      return same ? prev : next;
-    });
-  }, []);
+      applySelection((prev) => {
+        if (prev.size !== next.size) return next;
+        let same = true;
+        next.forEach((id) => {
+          if (!prev.has(id)) same = false;
+        });
+        return same ? prev : next;
+      });
+    },
+    [applySelection],
+  );
 
   const selectionProps = useMemo(() => ({ style: SELECTION_STYLE }), []);
 
@@ -70,23 +117,24 @@ export const SelectionProvider = ({
     selectionProps,
   });
 
-  const toggle = useCallback((id: string, event: React.MouseEvent) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (event.metaKey || event.ctrlKey) {
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-      } else {
-        next.clear();
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(
+    (id: string, event: React.MouseEvent) => {
+      applySelection((prev) => {
+        const next = new Set(prev);
+        if (event.metaKey || event.ctrlKey) {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        } else {
+          next.clear();
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [applySelection],
+  );
 
   // Clear selection on bare-ground clicks (anywhere not on a selectable item).
-  // react-drag-to-select skips elements with data-draggable="true", so a click
-  // on those won't bubble through this listener via composedPath check.
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       const path = e.composedPath();
@@ -98,19 +146,15 @@ export const SelectionProvider = ({
           return;
         }
       }
-      setSelected((prev) => (prev.size === 0 ? prev : new Set()));
+      applySelection((prev) => (prev.size === 0 ? prev : new Set()));
     };
     window.addEventListener("mousedown", onMouseDown);
     return () => window.removeEventListener("mousedown", onMouseDown);
-  }, []);
+  }, [applySelection]);
 
   const value = useMemo<ContextValue>(
-    () => ({
-      isSelected: (id) => selected.has(id),
-      toggle,
-      registerProvider,
-    }),
-    [selected, toggle, registerProvider],
+    () => ({ toggle, registerProvider, subscribe, getIsSelected }),
+    [toggle, registerProvider, subscribe, getIsSelected],
   );
 
   return (
@@ -121,10 +165,30 @@ export const SelectionProvider = ({
   );
 };
 
-export const useSelection = () => {
+const useSelectionContext = () => {
   const ctx = useContext(SelectionContext);
   if (!ctx) throw new Error("useSelection must be used within SelectionProvider");
   return ctx;
+};
+
+/**
+ * Stable selection actions (toggle). Identity never changes, so consumers
+ * can take this without re-rendering on selection updates.
+ */
+export const useSelectionActions = () => {
+  const { toggle } = useSelectionContext();
+  return { toggle };
+};
+
+/**
+ * Subscribe to a single asset's selection state. Only the calling
+ * component re-renders when this id's membership flips.
+ */
+export const useIsSelected = (id: string) => {
+  const { subscribe, getIsSelected } = useSelectionContext();
+  const sub = useCallback((cb: () => void) => subscribe(id, cb), [subscribe, id]);
+  const get = useCallback(() => getIsSelected(id), [getIsSelected, id]);
+  return useSyncExternalStore(sub, get, () => false);
 };
 
 /**
@@ -133,7 +197,7 @@ export const useSelection = () => {
  * pass an unstable callback without re-registering.
  */
 export const useRegisterSelectionBoxes = (getBoxes: BoxProvider) => {
-  const { registerProvider } = useSelection();
+  const { registerProvider } = useSelectionContext();
   const ref = useRef(getBoxes);
   useEffect(() => {
     ref.current = getBoxes;

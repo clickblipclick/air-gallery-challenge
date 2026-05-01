@@ -3,11 +3,14 @@
 import { useCallback, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Board } from "./api/boards";
-import { useSelection, useRegisterSelectionBoxes } from "./SelectionContext";
+import {
+  useIsSelected,
+  useRegisterSelectionBoxes,
+  useSelectionActions,
+} from "./SelectionContext";
 
 export const BoardList = ({ boards }: { boards: Board[] }) => {
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
-  const { isSelected, toggle } = useSelection();
 
   const getItemBoxes = useCallback(() => {
     const out: Array<{ id: string; box: DOMRect }> = [];
@@ -25,8 +28,6 @@ export const BoardList = ({ boards }: { boards: Board[] }) => {
         <BoardCard
           key={board.id}
           board={board}
-          isSelected={isSelected(board.id)}
-          onToggle={toggle}
           registerRef={(el) => {
             if (el) itemRefs.current.set(board.id, el);
             else itemRefs.current.delete(board.id);
@@ -39,19 +40,17 @@ export const BoardList = ({ boards }: { boards: Board[] }) => {
 
 const BoardCard = ({
   board,
-  isSelected,
-  onToggle,
   registerRef,
 }: {
   board: Board;
-  isSelected: boolean;
-  onToggle: (id: string, event: React.MouseEvent) => void;
   registerRef: (el: HTMLLIElement | null) => void;
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `board:${board.id}`,
     data: { kind: "board", boardId: board.id },
   });
+  const isSelected = useIsSelected(board.id);
+  const { toggle } = useSelectionActions();
 
   return (
     <li
@@ -59,7 +58,7 @@ const BoardCard = ({
         registerRef(el);
         setNodeRef(el);
       }}
-      onClick={(e) => onToggle(board.id, e)}
+      onClick={(e) => toggle(board.id, e)}
       data-draggable="true"
       data-selected={isSelected}
       data-drop-over={isOver}

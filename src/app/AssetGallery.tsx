@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useRef,
   useMemo,
   useState,
@@ -10,7 +11,7 @@ import {
 } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { justifyRows, type Row as RowType } from "./justifyRows";
-import { useSelection, useRegisterSelectionBoxes } from "./SelectionContext";
+import { useRegisterSelectionBoxes } from "./SelectionContext";
 import { useAssets } from "./AssetsProvider";
 import { useDnD, type DropIndicator } from "./DnDProvider";
 import { AssetCard } from "./AssetCard";
@@ -92,7 +93,6 @@ export const AssetGallery = () => {
   }, []);
 
   useRegisterSelectionBoxes(getItemBoxes);
-  const { isSelected, toggle } = useSelection();
 
   const activeId = activeAsset?.id ?? null;
 
@@ -125,8 +125,6 @@ export const AssetGallery = () => {
                 top={vRow.start - virtualizer.options.scrollMargin}
                 activeId={activeId}
                 indicator={indicator}
-                isSelected={isSelected}
-                onToggle={toggle}
               />
             );
           })}
@@ -141,21 +139,17 @@ export const AssetGallery = () => {
   );
 };
 
-const Row = ({
+const Row = memo(function Row({
   row,
   top,
   activeId,
   indicator,
-  isSelected,
-  onToggle,
 }: {
   row: RowType;
   top: number;
   activeId: string | null;
   indicator: DropIndicator | null;
-  isSelected: (id: string) => boolean;
-  onToggle: (id: string, event: React.MouseEvent) => void;
-}) => {
+}) {
   const indicatorItem = indicator
     ? row.items.find((it) => it.id === indicator.targetAssetId)
     : null;
@@ -189,15 +183,13 @@ const Row = ({
             key={item.id}
             item={item}
             isDragging={item.id === activeId}
-            isSelected={isSelected(item.id)}
-            onToggle={onToggle}
           />
         ))}
         {indicatorX !== null && <DropLine x={indicatorX} />}
       </div>
     </div>
   );
-};
+});
 
 const DropLine = ({ x }: { x: number }) => (
   <div
