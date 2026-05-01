@@ -20,7 +20,7 @@ export const BoardList = ({ boards }: { boards: Board[] }) => {
   useRegisterSelectionBoxes(getItemBoxes);
 
   return (
-    <ul className="relative flex flex-wrap gap-2">
+    <ul className="relative grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {boards.map((board) => (
         <BoardCard
           key={board.id}
@@ -64,7 +64,7 @@ const BoardCard = ({
       data-selected={isSelected}
       data-drop-over={isOver}
       data-has-thumbnail={Boolean(board.thumbnails?.[0])}
-      className="group relative aspect-square w-48 cursor-pointer rounded-xl bg-neutral-50 p-1 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-100 data-[selected=true]:bg-neutral-100 data-[selected=true]:ring-2 data-[selected=true]:ring-blue-600 data-[drop-over=true]:ring-2 data-[drop-over=true]:ring-blue-600"
+      className="group relative aspect-square w-full cursor-pointer rounded-xl bg-neutral-50 p-1 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-100 sm:w-48 data-[selected=true]:bg-neutral-100 data-[selected=true]:ring-2 data-[selected=true]:ring-blue-600 data-[drop-over=true]:ring-2 data-[drop-over=true]:ring-blue-600"
     >
       <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-lg">
         {board.thumbnails?.[0] && (

@@ -8,8 +8,11 @@ import { AssetsProvider } from "./AssetsProvider";
 import { DnDProvider } from "./DnDProvider";
 
 export default async function Home() {
-  const { data: boards } = await fetchBoards();
-  const { data: { clips: assets }, pagination } = await fetchAssets({
+  const { data: boards, total: boardTotal } = await fetchBoards();
+  const {
+    data: { clips: assets, total: clipsTotal },
+    pagination,
+  } = await fetchAssets({
     cursor: null,
   });
 
@@ -22,10 +25,10 @@ export default async function Home() {
       >
         <DnDProvider>
           <main className="flex flex-col gap-8 py-8">
-            <Section title="Boards">
+            <Section title={`${boardTotal} Boards`}>
               <BoardList boards={boards} />
             </Section>
-            <Section title="Assets">
+            <Section title={`${clipsTotal} Assets`}>
               <AssetGallery />
             </Section>
           </main>
