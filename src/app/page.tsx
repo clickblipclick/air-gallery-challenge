@@ -6,6 +6,7 @@ import { BoardList } from "./BoardList";
 import { SelectionProvider } from "./SelectionContext";
 import { AssetsProvider } from "./AssetsProvider";
 import { DnDProvider } from "./DnDProvider";
+import { SelectionBar } from "./SelectionBar";
 
 export default async function Home() {
   const { data: boards, total: boardTotal } = await fetchBoards();
@@ -32,6 +33,7 @@ export default async function Home() {
               <AssetGallery />
             </Section>
           </main>
+          <SelectionBar />
         </DnDProvider>
       </AssetsProvider>
     </SelectionProvider>
