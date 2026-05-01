@@ -8,7 +8,7 @@ import {
   useRegisterSelectionBoxes,
   useSelectionActions,
 } from "./SelectionContext";
-import { ItemContextMenu } from "./ItemContextMenu";
+import { ItemContextMenu, ItemMenuButton } from "./ItemContextMenu";
 
 export const BoardList = ({ boards }: { boards: Board[] }) => {
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
@@ -67,6 +67,12 @@ const BoardCard = ({
       data-has-thumbnail={Boolean(board.thumbnails?.[0])}
       className="group relative aspect-square w-full cursor-pointer rounded-xl bg-neutral-50 p-1 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-100 sm:w-48 data-[selected=true]:bg-neutral-100 data-[selected=true]:ring-2 data-[selected=true]:ring-blue-600 data-[drop-over=true]:ring-2 data-[drop-over=true]:ring-blue-600"
     >
+      <div className="absolute right-2 top-2 z-10">
+        <ItemMenuButton
+          id={board.id}
+          visibilityClass="group-hover:opacity-100"
+        />
+      </div>
       <div className="pointer-events-none absolute inset-1 overflow-hidden rounded-lg">
         {board.thumbnails?.[0] && (
           <>

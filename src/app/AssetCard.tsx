@@ -4,7 +4,7 @@ import { memo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LaidOutItem } from "./justifyRows";
 import { useIsSelected, useSelectionActions } from "./SelectionContext";
-import { ItemContextMenu } from "./ItemContextMenu";
+import { ItemContextMenu, ItemMenuButton } from "./ItemContextMenu";
 
 // Round up to a coarse bucket so the CDN cache hits across small resizes.
 const SIZE_BUCKET = 64;
@@ -83,6 +83,12 @@ export const AssetCard = memo(function AssetCard({
             alt={title ?? ""}
             draggable={false}
             className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="absolute right-3 top-3">
+          <ItemMenuButton
+            id={item.id}
+            visibilityClass="group-hover/asset-card:opacity-100"
           />
         </div>
         <div className="pointer-events-none absolute inset-1 flex flex-col justify-end overflow-hidden rounded-xl">
