@@ -8,8 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Clip } from "./api/clips";
-import { loadMoreAssets } from "./actions";
+import { fetchAssets, Clip } from "./api/clips";
 
 type Position = "before" | "after";
 
@@ -55,7 +54,7 @@ export const AssetsProvider = ({
     if (loadingRef.current || !hasMore) return;
     loadingRef.current = true;
     setIsLoadingMore(true);
-    loadMoreAssets(cursor)
+    fetchAssets({ cursor })
       .then((res) => {
         setAssets((prev) => [...prev, ...res.data.clips]);
         setCursor(res.pagination.cursor);
@@ -72,10 +71,7 @@ export const AssetsProvider = ({
       setAssets((prev) => {
         const fromIdx = prev.findIndex((a) => a.id === draggedId);
         if (fromIdx === -1) return prev;
-        const without = [
-          ...prev.slice(0, fromIdx),
-          ...prev.slice(fromIdx + 1),
-        ];
+        const without = [...prev.slice(0, fromIdx), ...prev.slice(fromIdx + 1)];
         let toIdx = without.findIndex((a) => a.id === targetId);
         if (toIdx === -1) return prev;
         if (position === "after") toIdx += 1;
