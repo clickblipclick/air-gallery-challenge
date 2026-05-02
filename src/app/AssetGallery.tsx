@@ -9,7 +9,11 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import {
+  defaultRangeExtractor,
+  useWindowVirtualizer,
+  type Range,
+} from "@tanstack/react-virtual";
 import { justifyRows, type Row as RowType } from "./justifyRows";
 import { useRegisterSelectionBoxes } from "./SelectionContext";
 import { useAssets } from "./AssetsProvider";
@@ -54,11 +58,28 @@ export const AssetGallery = () => {
     [assets, width],
   );
 
+  const activeRowIndex = useMemo(() => {
+    if (!activeAsset) return -1;
+    return rows.findIndex((r) =>
+      r.items.some((it) => it.id === activeAsset.id),
+    );
+  }, [rows, activeAsset]);
+
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const base = defaultRangeExtractor(range);
+      if (activeRowIndex < 0 || base.includes(activeRowIndex)) return base;
+      return [...base, activeRowIndex].sort((a, b) => a - b);
+    },
+    [activeRowIndex],
+  );
+
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
     scrollMargin: parentRef.current?.offsetTop ?? 0,
     estimateSize: (i) => rows[i].height + GAP,
     overscan: 4,
+    rangeExtractor,
   });
 
   useEffect(() => {
